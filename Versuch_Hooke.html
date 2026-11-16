@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtueller Versuch – Feder</title>
+<style>
+  :root {
+    --bg: #f3f4f6;
+    --panel: #ffffff;
+    --text: #111827;
+    --muted: #4b5563;
+    --line: #d1d5db;
+    --accent: #1d4ed8;
+    --accent-bg: #eff6ff;
+    --warn: #b45309;
+    --warn-bg: #fef3c7;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+    font-size: 17px;
+    line-height: 1.35;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    background: var(--panel);
+    border-bottom: 3px solid var(--accent);
+    padding: 10px 16px;
+  }
+  header h1 { margin: 0; font-size: 1.25em; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 0.9em; }
+  .layout {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    gap: 12px;
+    padding: 12px;
+  }
+  .szene-box {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .szene-leiste {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .szene-leiste span { color: var(--muted); font-size: 0.9em; margin-right: 4px; }
+  .wrap {
+    flex: 1;
+    overflow: auto;
+    background: linear-gradient(#f8fafc, #eef2f7);
+    min-height: 0;
+  }
+  svg#szene { display: block; margin: 0 auto; user-select: none; -webkit-user-select: none; }
+  .material {
+    width: 340px;
+    flex: none;
+    overflow-y: auto;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px;
+  }
+  .material h2 { margin: 0 0 8px; font-size: 1.05em; }
+  .teil {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+  }
+  .teil.aktiv { border-color: var(--accent); background: var(--accent-bg); }
+  .teil .kopf { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .teil .name { font-weight: 600; }
+  .teil .status { color: var(--muted); font-size: 0.85em; }
+  .teil .knoepfe { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  button {
+    font: inherit;
+    font-size: 0.92em;
+    padding: 5px 12px;
+    border-radius: 8px;
+    border: 2px solid var(--accent);
+    background: #fff;
+    color: var(--accent);
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: var(--accent-bg); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+  button.klein { padding: 3px 10px; min-width: 2.4em; }
+  .meldung {
+    min-height: 2.6em;
+    margin: 4px 0 10px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 0.92em;
+    background: transparent;
+  }
+  .meldung.sichtbar { background: var(--warn-bg); color: var(--warn); }
+  .neu { margin-top: 6px; width: 100%; }
+  [data-hit] { cursor: pointer; }
+  #zollstock { cursor: grab; touch-action: none; }
+  #zollstock.ziehen { cursor: grabbing; }
+  @media (max-width: 820px) {
+    .layout { flex-direction: column; }
+    .material { width: auto; max-height: none; }
+    .szene-box { min-height: 70vh; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Virtueller Versuch: Feder, Gummiband und Massestücke</h1>
+  <p>Klicke im Materialkasten auf die Teile, um sie zu verwenden. Angebrachte Teile kannst du auch im Bild anklicken, um sie wieder abzunehmen. Den Zollstock verschiebst du mit der Maus oder dem Finger.</p>
+</header>
+
+<div class="layout">
+  <section class="szene-box" aria-label="Versuchsaufbau">
+    <div class="szene-leiste">
+      <span>Ansicht:</span>
+      <button class="klein" id="zoomOut" type="button" title="Verkleinern">−</button>
+      <button class="klein" id="zoomIn" type="button" title="Vergrößern">+</button>
+      <button id="zoomFit" type="button">Ganz zeigen</button>
+    </div>
+    <div class="wrap" id="wrap">
+      <svg id="szene" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 1240" role="img" aria-label="Stativ mit Versuchsaufbau">
+        <defs>
+          <linearGradient id="metall" x1="0" x2="1">
+            <stop offset="0" stop-color="#6b7280"/>
+            <stop offset="0.45" stop-color="#d1d5db"/>
+            <stop offset="1" stop-color="#4b5563"/>
+          </linearGradient>
+          <linearGradient id="holz" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stop-color="#c08a52"/>
+            <stop offset="1" stop-color="#8b5a2b"/>
+          </linearGradient>
+          <linearGradient id="m10" x1="0" x2="1">
+            <stop offset="0" stop-color="#9ca3af"/>
+            <stop offset="0.5" stop-color="#e5e7eb"/>
+            <stop offset="1" stop-color="#9ca3af"/>
+          </linearGradient>
+          <linearGradient id="m50" x1="0" x2="1">
+            <stop offset="0" stop-color="#4b5563"/>
+            <stop offset="0.5" stop-color="#9ca3af"/>
+            <stop offset="1" stop-color="#4b5563"/>
+          </linearGradient>
+        </defs>
+
+        <!-- Tisch -->
+        <rect x="0" y="1180" width="400" height="60" fill="url(#holz)"/>
+        <rect x="0" y="1180" width="400" height="3" fill="#6b4423"/>
+
+        <!-- Stativ -->
+        <rect x="40" y="1166" width="200" height="14" rx="3" fill="#374151"/>
+        <rect x="110" y="30" width="8" height="1137" fill="url(#metall)"/>
+        <rect x="114" y="44" width="190" height="6" fill="url(#metall)"/>
+        <rect x="102" y="36" width="24" height="22" rx="3" fill="#1f2937"/>
+        <circle cx="96" cy="47" r="4" fill="#1f2937"/>
+        <rect x="298.8" y="50" width="2.4" height="20" fill="#4b5563"/>
+        <path d="M300 70 q 0 10 -5 10 q -4 0 -4 -4" fill="none" stroke="#4b5563" stroke-width="2.4" stroke-linecap="round"/>
+
+        <!-- Hängender Aufbau -->
+        <g id="aufbau"></g>
+
+        <!-- Zollstock -->
+        <g id="zollstock" style="display:none"></g>
+      </svg>
+    </div>
+  </section>
+
+  <aside class="material" aria-label="Materialkasten">
+    <h2>Materialkasten</h2>
+    <div class="meldung" id="meldung" aria-live="polite"></div>
+
+    <div class="teil" id="t-weich">
+      <div class="kopf"><span class="name">Weiche Feder</span><span class="status" id="s-weich"></span></div>
+      <div class="knoepfe"><button type="button" data-aktion="weich"></button></div>
+    </div>
+    <div class="teil" id="t-hart">
+      <div class="kopf"><span class="name">Harte Feder</span><span class="status" id="s-hart"></span></div>
+      <div class="knoepfe"><button type="button" data-aktion="hart"></button></div>
+    </div>
+    <div class="teil" id="t-gummi">
+      <div class="kopf"><span class="name">Gummiband</span><span class="status" id="s-gummi"></span></div>
+      <div class="knoepfe"><button type="button" data-aktion="gummi"></button></div>
+    </div>
+    <div class="teil" id="t-teller">
+      <div class="kopf"><span class="name">Masseteller (10 g)</span><span class="status" id="s-teller"></span></div>
+      <div class="knoepfe"><button type="button" data-aktion="teller"></button></div>
+    </div>
+    <div class="teil" id="t-m10">
+      <div class="kopf"><span class="name">Massestücke 10 g</span><span class="status" id="s-m10"></span></div>
+      <div class="knoepfe"><button type="button" data-aktion="m10">Auflegen</button></div>
+    </div>
+    <div class="teil" id="t-m50">
+      <div class="kopf"><span class="name">Massestücke 50 g</span><span class="status" id="s-m50"></span></div>
+      <div class="knoepfe"><button type="button" data-aktion="m50">Auflegen</button></div>
+    </div>
+    <div class="teil">
+      <div class="knoepfe"><button type="button" data-aktion="abnehmen" style="width:100%">Oberstes Massestück abnehmen</button></div>
+    </div>
+    <div class="teil" id="t-zoll">
+      <div class="kopf"><span class="name">Zollstock</span><span class="status" id="s-zoll"></span></div>
+      <div class="knoepfe">
+        <button type="button" data-aktion="zoll"></button>
+      </div>
+    </div>
+
+    <button type="button" class="neu" id="neu">Alles zurücksetzen</button>
+  </aside>
+</div>
+
+<script>
+(() => {
+  // ---------- Geometrie (Einheit: mm) ----------
+  const HOOK_X = 300, HOOK_Y = 80, TABLE_Y = 1180;
+  const EYE = 8;                 // Öse oben und unten
+  const RING = 6, STEM = 80, DISC = 4;
+  const PLATE_H = RING + STEM + DISC;
+  const ZOLL_LEN = 1000, ZOLL_W = 17, ZOLL_X = HOOK_X - 14 - ZOLL_W;
+  const G = 9.81;
+
+  // ---------- Versuchsobjekte ----------
+  const OBJ = {
+    weich: { L0: 100, D: 3,  Flim: 1.2, n: 32, wire: 1.4, r: 11, farbe: "#64748b" },
+    hart:  { L0: 80,  D: 20, Flim: 8,   n: 18, wire: 2.6, r: 10, farbe: "#475569" },
+    gummi: { L0: 100, gummi: true }
+  };
+
+  const S = {
+    haengt: null,
+    teller: false,
+    stapel: [],            // Massen in g, unten zuerst
+    vorrat: { 10: 4, 50: 5 },
+    zoll: false,
+    zy: 60,
+    maxF: { weich: 0, hart: 0, gummi: 0 },
+    x: 0, v: 0, ziel: 0, omega: 10, laeuft: false
+  };
+
+  // Ausdehnung in mm bei Kraft F in N (Erstbelastung)
+  function extErst(o, F) {
+    if (o.gummi) return 450 * F / (F + 0.6) + 40 * F;
+    if (F <= o.Flim) return F / o.D * 1000;
+    return o.Flim / o.D * 1000 + (F - o.Flim) / o.D * 1000 * 2;
+  }
+  // Ausdehnung unter Berücksichtigung einer früheren Überdehnung
+  function ext(key, F) {
+    const o = OBJ[key];
+    if (o.gummi) return extErst(o, F);
+    const mF = S.maxF[key];
+    if (mF <= o.Flim || F >= mF) return extErst(o, F);
+    const eMax = extErst(o, mF);
+    const rest = 0.7 * (eMax - o.Flim / o.D * 1000);
+    return rest + F * (eMax - rest) / mF;
+  }
+
+  function lastMasseKg() {
+    if (!S.teller) return 0;
+    return (10 + S.stapel.reduce((a, b) => a + b, 0)) / 1000;
+  }
+
+  function maxExt(key) {
+    const o = OBJ[key];
+    const unten = S.teller ? PLATE_H : 2;
+    return TABLE_Y - (HOOK_Y + 2 * EYE + unten) - o.L0;
+  }
+
+  // Gleichgewicht bestimmen, Überdehnung merken
+  function gleichgewicht() {
+    const key = S.haengt;
+    if (!key) return { e: 0, aufTisch: false };
+    const F = lastMasseKg() * G;
+    let e = ext(key, F), Fakt = F, aufTisch = false;
+    const grenze = maxExt(key);
+    if (e > grenze) {
+      aufTisch = true;
+      let lo = 0, hi = F;
+      for (let i = 0; i < 60; i++) {
+        const mid = (lo + hi) / 2;
+        if (ext(key, mid) > grenze) hi = mid; else lo = mid;
+      }
+      Fakt = lo;
+      e = grenze;
+    }
+    if (!OBJ[key].gummi && Fakt > S.maxF[key]) S.maxF[key] = Fakt;
+    // Eigenfrequenz für das Nachschwingen
+    const m = Math.max(lastMasseKg(), 0.003);
+    const dF = 0.005;
+    const dE = Math.max(ext(key, Fakt + dF) - ext(key, Fakt), 1e-6) / 1000;
+    S.omega = Math.min(30, Math.max(3, Math.sqrt((dF / dE) / m)));
+    return { e, aufTisch };
+  }
+
+  function zustandGeaendert(sofort) {
+    const { e, aufTisch } = gleichgewicht();
+    S.ziel = e;
+    if (sofort || aufTisch) { S.x = e; S.v = 0; }
+    starte();
+    zeichne();
+    panel();
+  }
+
+  // ---------- Animation ----------
+  let tAlt = null;
+  function starte() {
+    if (!S.laeuft) { S.laeuft = true; tAlt = null; requestAnimationFrame(schritt); }
+  }
+  function schritt(t) {
+    if (tAlt === null) tAlt = t;
+    let dt = Math.min((t - tAlt) / 1000, 0.05);
+    tAlt = t;
+    const n = 20, h = dt / n, w = S.omega, zeta = 0.22;
+    for (let i = 0; i < n; i++) {
+      const a = -w * w * (S.x - S.ziel) - 2 * zeta * w * S.v;
+      S.v += a * h;
+      S.x += S.v * h;
+    }
+    const grenze = S.haengt ? maxExt(S.haengt) : Infinity;
+    if (S.x > grenze) { S.x = grenze; S.v = 0; }
+    if (Math.abs(S.x - S.ziel) < 0.005 && Math.abs(S.v) < 0.02) {
+      S.x = S.ziel; S.v = 0; S.laeuft = false;
+      zeichne();
+      return;
+    }
+    zeichne();
+    requestAnimationFrame(schritt);
+  }
+
+  // ---------- Zeichnen ----------
+  const aufbau = document.getElementById("aufbau");
+
+  function federPfad(o, y0, y1) {
+    const n = o.n, L = y1 - y0;
+    let d = `M${HOOK_X} ${y0.toFixed(2)}`;
+    for (let k = 0; k < 2 * n; k++) {
+      const x = HOOK_X + (k % 2 ? -o.r : o.r);
+      const y = y0 + (k + 0.5) * L / (2 * n);
+      d += ` L${x} ${y.toFixed(2)}`;
+    }
+    d += ` L${HOOK_X} ${y1.toFixed(2)}`;
+    return d;
+  }
+
+  function zeichne() {
+    let g = "";
+    if (S.haengt) {
+      const key = S.haengt, o = OBJ[key];
+      const L = o.L0 + S.x;
+      const top = HOOK_Y, y0 = top + EYE, y1 = y0 + L, bot = y1 + EYE;
+
+      if (o.gummi) {
+        const f = Math.sqrt(o.L0 / L);
+        const w = Math.max(3, 9 * f), sw = Math.max(1.2, 2.6 * f);
+        g += `<g data-hit="haengt">
+          <rect x="${HOOK_X - w / 2}" y="${top}" width="${w}" height="${bot - top}" rx="${w / 2}" fill="none" stroke="#b45309" stroke-width="${sw}"/>
+          <rect x="${HOOK_X - 14}" y="${top}" width="28" height="${bot - top}" fill="transparent"/>
+        </g>`;
+      } else {
+        g += `<g data-hit="haengt">
+          <circle cx="${HOOK_X}" cy="${top + EYE / 2}" r="${EYE / 2}" fill="none" stroke="${o.farbe}" stroke-width="${o.wire}"/>
+          <path d="${federPfad(o, y0, y1)}" fill="none" stroke="${o.farbe}" stroke-width="${o.wire}" stroke-linejoin="round"/>
+          <circle cx="${HOOK_X}" cy="${y1 + EYE / 2}" r="${EYE / 2}" fill="none" stroke="${o.farbe}" stroke-width="${o.wire}"/>
+          <rect x="${HOOK_X - o.r - 4}" y="${top}" width="${2 * o.r + 8}" height="${bot - top}" fill="transparent"/>
+        </g>`;
+      }
+
+      if (S.teller) {
+        const ringY = bot + 2;
+        const stemTop = bot + RING, discTop = stemTop + STEM;
+        let stapel = "", y = discTop;
+        S.stapel.forEach(m => {
+          const h = m === 10 ? 3 : 9;
+          y -= h;
+          stapel += `<rect x="${HOOK_X - 25}" y="${y}" width="50" height="${h}" rx="1" fill="url(#m${m})" stroke="#374151" stroke-width="0.4"/>`;
+        });
+        g += `<g data-hit="teller">
+          <circle cx="${HOOK_X}" cy="${ringY}" r="3" fill="none" stroke="#374151" stroke-width="1.4"/>
+          <rect x="${HOOK_X - 1.5}" y="${stemTop - 1}" width="3" height="${STEM + 1}" fill="#374151"/>
+          <rect x="${HOOK_X - 28}" y="${discTop}" width="56" height="${DISC}" rx="1" fill="#1f2937"/>
+        </g>`;
+        if (stapel) {
+          g += `<g data-hit="stapel">${stapel}
+            <rect x="${HOOK_X - 1.5}" y="${y}" width="3" height="${discTop - y}" fill="#374151"/>
+          </g>`;
+        }
+      }
+    }
+    aufbau.innerHTML = g;
+  }
+
+  // ---------- Zollstock ----------
+  const zoll = document.getElementById("zollstock");
+  (function baueZollstock() {
+    let s = `<rect x="0" y="0" width="${ZOLL_W}" height="${ZOLL_LEN}" fill="#facc15" stroke="#a16207" stroke-width="0.5"/>`;
+    for (let k = 200; k < ZOLL_LEN; k += 200) {
+      s += `<line x1="0" y1="${k}" x2="${ZOLL_W}" y2="${k}" stroke="#a16207" stroke-width="0.6"/>`;
+      s += `<circle cx="${ZOLL_W / 2}" cy="${k - 4}" r="1.3" fill="#a16207"/>`;
+    }
+    let ticks = "";
+    for (let i = 0; i <= ZOLL_LEN; i++) {
+      const len = i % 10 === 0 ? 7 : (i % 5 === 0 ? 5 : 3);
+      ticks += `M${ZOLL_W} ${i}h${-len}`;
+    }
+    s += `<path d="${ticks}" stroke="#111" stroke-width="0.25"/>`;
+    for (let c = 1; c < ZOLL_LEN / 10; c++) {
+      const rot = c % 10 === 0;
+      s += `<text x="9.3" y="${c * 10}" font-size="${rot ? 4.6 : 3.9}" text-anchor="end" dominant-baseline="middle" font-family="Arial" font-weight="${rot ? 700 : 400}" fill="${rot ? "#b91c1c" : "#111"}">${c}</text>`;
+    }
+    s += `<rect x="0" y="0" width="${ZOLL_W}" height="${ZOLL_LEN}" fill="transparent"/>`;
+    zoll.innerHTML = s;
+  })();
+
+  function zollPos() {
+    S.zy = Math.min(TABLE_Y - ZOLL_LEN, Math.max(0, S.zy));
+    zoll.setAttribute("transform", `translate(${ZOLL_X} ${S.zy})`);
+    zoll.style.display = S.zoll ? "" : "none";
+  }
+
+  const svg = document.getElementById("szene");
+  function svgY(e) {
+    const p = svg.createSVGPoint();
+    p.x = e.clientX; p.y = e.clientY;
+    return p.matrixTransform(svg.getScreenCTM().inverse()).y;
+  }
+  let ziehen = null;
+  zoll.addEventListener("pointerdown", e => {
+    ziehen = { y: svgY(e), zy: S.zy };
+    zoll.setPointerCapture(e.pointerId);
+    zoll.classList.add("ziehen");
+    e.preventDefault();
+  });
+  zoll.addEventListener("pointermove", e => {
+    if (!ziehen) return;
+    S.zy = ziehen.zy + svgY(e) - ziehen.y;
+    zollPos();
+  });
+  const loslassen = () => { ziehen = null; zoll.classList.remove("ziehen"); };
+  zoll.addEventListener("pointerup", loslassen);
+  zoll.addEventListener("pointercancel", loslassen);
+
+
+  // ---------- Aktionen ----------
+  const meldungEl = document.getElementById("meldung");
+  let meldungTimer = null;
+  function meldung(t) {
+    meldungEl.textContent = t;
+    meldungEl.classList.toggle("sichtbar", !!t);
+    clearTimeout(meldungTimer);
+    if (t) meldungTimer = setTimeout(() => meldung(""), 4000);
+  }
+
+  function aufhaengen(key) {
+    if (S.haengt === key) {
+      if (S.teller) return meldung("Nimm zuerst den Masseteller ab.");
+      S.haengt = null; S.x = 0; S.v = 0;
+      zeichne(); panel(); meldung("");
+      return;
+    }
+    if (S.haengt) return meldung("Am Stativ hängt schon etwas. Nimm es zuerst ab.");
+    S.haengt = key;
+    S.x = ext(key, 0); S.v = 0;
+    zustandGeaendert(true);
+    meldung("");
+  }
+
+  function teller() {
+    if (S.teller) {
+      if (S.stapel.length) return meldung("Nimm zuerst die Massestücke vom Teller.");
+      S.teller = false;
+      zustandGeaendert(true);
+      return meldung("");
+    }
+    if (!S.haengt) return meldung("Der Masseteller braucht etwas, woran er hängen kann.");
+    S.teller = true;
+    zustandGeaendert(false);
+    meldung("");
+  }
+
+  function auflegen(m) {
+    if (!S.teller) return meldung("Massestücke legst du auf den Masseteller.");
+    if (S.vorrat[m] <= 0) return meldung(`Es sind keine Massestücke mit ${m} g mehr im Kasten.`);
+    S.vorrat[m]--;
+    S.stapel.push(m);
+    zustandGeaendert(false);
+    meldung("");
+  }
+
+  function abnehmen() {
+    if (!S.stapel.length) return meldung("Auf dem Teller liegt kein Massestück.");
+    const m = S.stapel.pop();
+    S.vorrat[m]++;
+    zustandGeaendert(false);
+    meldung("");
+  }
+
+  function zollstock() {
+    S.zoll = !S.zoll;
+    zollPos(); panel();
+  }
+
+  document.querySelectorAll("[data-aktion]").forEach(b => {
+    b.addEventListener("click", () => {
+      const a = b.dataset.aktion;
+      if (a === "weich" || a === "hart" || a === "gummi") aufhaengen(a);
+      else if (a === "teller") teller();
+      else if (a === "m10") auflegen(10);
+      else if (a === "m50") auflegen(50);
+      else if (a === "abnehmen") abnehmen();
+      else if (a === "zoll") zollstock();
+    });
+  });
+
+  aufbau.addEventListener("click", e => {
+    const t = e.target.closest("[data-hit]");
+    if (!t) return;
+    const h = t.dataset.hit;
+    if (h === "haengt") aufhaengen(S.haengt);
+    else if (h === "teller") teller();
+    else if (h === "stapel") abnehmen();
+  });
+
+  let neuBestaetigen = false;
+  const neuBtn = document.getElementById("neu");
+  neuBtn.addEventListener("click", () => {
+    if (!neuBestaetigen) {
+      neuBestaetigen = true;
+      neuBtn.textContent = "Wirklich zurücksetzen? Nochmal klicken";
+      setTimeout(() => { neuBestaetigen = false; neuBtn.textContent = "Alles zurücksetzen"; }, 3000);
+      return;
+    }
+    neuBestaetigen = false;
+    neuBtn.textContent = "Alles zurücksetzen";
+    Object.assign(S, { haengt: null, teller: false, stapel: [], vorrat: { 10: 4, 50: 5 }, zoll: false, zy: 60,
+      maxF: { weich: 0, hart: 0, gummi: 0 }, x: 0, v: 0, ziel: 0 });
+    zollPos(); zeichne(); panel(); meldung("");
+  });
+
+  // ---------- Materialkasten ----------
+  function panel() {
+    ["weich", "hart", "gummi"].forEach(k => {
+      const dran = S.haengt === k;
+      document.getElementById("s-" + k).textContent = dran ? "hängt am Stativ" : "im Kasten";
+      document.getElementById("t-" + k).classList.toggle("aktiv", dran);
+      document.querySelector(`[data-aktion="${k}"]`).textContent = dran ? "Abnehmen" : "An das Stativ hängen";
+    });
+    document.getElementById("s-teller").textContent = S.teller ? "hängt" : "im Kasten";
+    document.getElementById("t-teller").classList.toggle("aktiv", S.teller);
+    document.querySelector('[data-aktion="teller"]').textContent = S.teller ? "Abnehmen" : "Anhängen";
+    [10, 50].forEach(m => {
+      const auf = S.stapel.filter(x => x === m).length;
+      document.getElementById("s-m" + m).textContent = `${S.vorrat[m]} im Kasten, ${auf} auf dem Teller`;
+      document.getElementById("t-m" + m).classList.toggle("aktiv", auf > 0);
+      document.querySelector(`[data-aktion="m${m}"]`).disabled = S.vorrat[m] === 0;
+    });
+    document.querySelector('[data-aktion="abnehmen"]').disabled = S.stapel.length === 0;
+    document.getElementById("s-zoll").textContent = S.zoll ? "angelegt" : "im Kasten";
+    document.getElementById("t-zoll").classList.toggle("aktiv", S.zoll);
+    document.querySelector('[data-aktion="zoll"]').textContent = S.zoll ? "Weglegen" : "Anlegen";
+  }
+
+  // ---------- Ansicht / Zoom ----------
+  const wrap = document.getElementById("wrap");
+  const VB_W = 400, VB_H = 1240;
+  let zoom = 1;
+  function basis() {
+    return Math.min((wrap.clientHeight - 4) / VB_H, (wrap.clientWidth - 4) / VB_W);
+  }
+  function setzeZoom(z, mitte) {
+    const altW = svg.clientWidth || 1, altH = svg.clientHeight || 1;
+    const fx = (wrap.scrollLeft + wrap.clientWidth / 2) / altW;
+    const fy = (wrap.scrollTop + wrap.clientHeight / 2) / altH;
+    zoom = Math.min(10, Math.max(1, z));
+    const b = basis() * zoom;
+    svg.setAttribute("width", Math.round(VB_W * b));
+    svg.setAttribute("height", Math.round(VB_H * b));
+    if (mitte !== false) {
+      wrap.scrollLeft = fx * VB_W * b - wrap.clientWidth / 2;
+      wrap.scrollTop = fy * VB_H * b - wrap.clientHeight / 2;
+    }
+  }
+  document.getElementById("zoomIn").addEventListener("click", () => setzeZoom(zoom * 1.5));
+  document.getElementById("zoomOut").addEventListener("click", () => setzeZoom(zoom / 1.5));
+  document.getElementById("zoomFit").addEventListener("click", () => setzeZoom(1));
+  window.addEventListener("resize", () => setzeZoom(zoom));
+
+  // ---------- Start ----------
+  zollPos(); zeichne(); panel();
+  setzeZoom(1, false);
+})();
+</script>
+</body>
+</html>
